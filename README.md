@@ -107,6 +107,15 @@ Use `--isolated` with `profilex add` to opt out for a profile.
 - `profilex run <tool> [profile] -- [args...]` — Run tool with profile context
 - `profilex shim install [--dir <path>]` — Reinstall all shims
 - `profilex shim uninstall [--all] [<tool> <profile>]` — Remove shims
+- `profilex usage export [--out <file>] [--deep]` — Export unified usage bundle for ProfileX-UI
+
+### Unified usage export for ProfileX-UI
+
+```bash
+profilex usage export --out ./public/local-unified-usage.json --deep
+```
+
+This scans ProfileX-managed and stock Claude/Codex usage locations, normalizes events, maps them to profiles (or `default-*` buckets), and writes a single JSON bundle for ProfileX-UI.
 
 ---
 

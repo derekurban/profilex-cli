@@ -62,6 +62,8 @@ func Run(args []string) int {
 		err = cmdRename(rootDir, rest)
 	case "shim":
 		err = cmdShim(rootDir, rest)
+	case "usage":
+		err = cmdUsage(rootDir, rest)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", cmd)
 		printHelp()
@@ -95,6 +97,7 @@ func printHelp() {
   run <tool> [profile] -- ...   Run a tool with the given profile
   shim install [--dir <d>]      Reinstall shims for all profiles
   shim uninstall [--all]        Remove shims
+  usage export [options]        Export unified local usage bundle (for ProfileX-UI)
 
 %s
   --root <dir>     Override state directory (default: ~/.profilex)

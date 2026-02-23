@@ -55,3 +55,18 @@ Remove all ProfileX-generated shims in a directory.
 ## `profilex shim uninstall <tool> <profile> [--dir <path>]`
 
 Remove one specific generated shim.
+
+## `profilex usage export [--out <file>] [--deep] [--max-files <n>] [--timezone <tz>] [--cost-mode <mode>]`
+
+Export a unified local usage bundle JSON that ProfileX-UI can ingest directly.
+
+Defaults:
+
+- `--out ./public/local-unified-usage.json`
+- `--max-files 5000`
+- `--cost-mode auto`
+
+Options:
+
+- `--deep` expands scan to broader home-directory candidates
+- `--cost-mode` accepts `auto|calculate|display`
