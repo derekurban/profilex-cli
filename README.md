@@ -87,11 +87,18 @@ codex-main
 
 After creating a profile, just run the shim (e.g. `claude-work`). You'll be prompted to authenticate on first use.
 
+By default, new profiles share session/history storage per tool:
+
+- Claude profiles link `<profile>/projects` to `~/.profilex/shared/claude/projects`
+- Codex profiles link `<profile>/sessions` to `~/.profilex/shared/codex/sessions`
+
+Use `--isolated` with `profilex add` to opt out for a profile.
+
 ---
 
 ## Commands
 
-- `profilex add <tool> <profile>` — Create profile + install shim
+- `profilex add <tool> <profile> [--isolated]` — Create profile + install shim
 - `profilex remove <tool> <profile> [--purge]` — Remove profile + shim
 - `profilex uninstall [--purge]` — Uninstall profilex binary (and optionally local profilex state)
 - `profilex list [--tool claude|codex] [--json]` — List profiles with status
@@ -110,12 +117,17 @@ Default root: `~/.profilex` (or `PROFILEX_HOME` override)
 ```
 ~/.profilex/
 ├── state.json
-└── profiles/
+├── profiles/
+│   ├── claude/
+│   │   ├── personal/
+│   │   └── work/
+│   └── codex/
+│       └── main/
+└── shared/
     ├── claude/
-    │   ├── personal/
-    │   └── work/
+    │   └── projects/
     └── codex/
-        └── main/
+        └── sessions/
 ```
 
 ---

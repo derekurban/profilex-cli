@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/derekurban/profilex-cli/internal/store"
@@ -243,5 +244,64 @@ func TestStatusRowsSurfaceUnsafeDirErrors(t *testing.T) {
 	}
 	if rows[0].Error == "" {
 		t.Fatalf("expected unsafe directory error in status row")
+	}
+}
+
+func TestEnableSharedSessionsCreatesLink(t *testing.T) {
+	m := newTestManager(t)
+	p, _, err := m.EnsureProfile(store.ToolCodex, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sharedDir, err := m.EnableSharedSessions(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Stat(sharedDir); err != nil {
+		t.Fatalf("shared directory should exist: %v", err)
+	}
+
+	mount := filepath.Join(p.Dir, "sessions")
+	resolved, err := filepath.EvalSymlinks(mount)
+	if err != nil {
+		if runtime.GOOS == "windows" {
+			// Junctions can behave differently on some CI setups; ensure mount exists at least.
+			if _, statErr := os.Stat(mount); statErr != nil {
+				t.Fatalf("mount should exist: %v", statErr)
+			}
+			return
+		}
+		t.Fatalf("expected mounted shared sessions dir: %v", err)
+	}
+
+	expected, err := filepath.EvalSymlinks(sharedDir)
+	if err != nil {
+		expected, _ = filepath.Abs(sharedDir)
+	}
+	actual, _ := filepath.Abs(resolved)
+	if !samePath(actual, expected) {
+		t.Fatalf("mount should resolve to shared dir: got %q want %q", actual, expected)
+	}
+}
+
+func TestEnableSharedSessionsRejectsNonEmptyLocalDir(t *testing.T) {
+	m := newTestManager(t)
+	p, _, err := m.EnsureProfile(store.ToolClaude, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	projectsDir := filepath.Join(p.Dir, "projects")
+	if err := os.MkdirAll(projectsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(projectsDir, "keep.jsonl"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := m.EnableSharedSessions(p); err == nil {
+		t.Fatalf("expected non-empty local session dir to be rejected")
 	}
 }

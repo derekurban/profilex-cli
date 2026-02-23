@@ -86,7 +86,7 @@ func printHelp() {
   profilex <command> [options]
 
 %s
-  add <tool> <profile>          Create a new profile and install its shim
+  add <tool> <profile> [--isolated]  Create a new profile and install its shim
   remove <tool> <profile>       Remove a profile and its shim
   uninstall [--purge]           Uninstall profilex from this machine
   list [--tool <t>] [--json]    List all profiles with auth status
@@ -118,9 +118,13 @@ func printHelp() {
 // --- add ---
 
 func cmdAdd(rootDir string, args []string) error {
+	isolated, args := extractBool(args, "--isolated")
+
 	if hasHelp(args) || len(args) < 2 {
-		fmt.Printf("Usage: profilex add <tool> <profile>\n\n")
+		fmt.Printf("Usage: profilex add <tool> <profile> [--isolated]\n\n")
 		fmt.Printf("Supported tools: %s\n", strings.Join(toolNames(), ", "))
+		fmt.Printf("\n")
+		fmt.Printf("  --isolated   Keep session/history storage private for this profile\n")
 		return nil
 	}
 
@@ -144,10 +148,24 @@ func cmdAdd(rootDir string, args []string) error {
 		return nil
 	}
 
+	sharedDir := ""
+	sharedErr := error(nil)
+	if !isolated {
+		sharedDir, sharedErr = mgr.EnableSharedSessions(profile)
+	}
+
 	shimPath, shimErr := installShimForProfile(profile)
 
 	fmt.Printf("%s Created profile %s\n", Green("✓"), Bold(string(tool)+"/"+profile.Name))
 	fmt.Printf("   📁 Config: %s\n", Dim(profile.Dir))
+
+	if isolated {
+		fmt.Printf("   🔒 Sessions: isolated (no shared session link)\n")
+	} else if sharedErr != nil {
+		fmt.Printf("   %s Shared sessions not enabled: %v\n", Yellow("⚠"), sharedErr)
+	} else {
+		fmt.Printf("   🔁 Shared sessions: %s\n", Dim(sharedDir))
+	}
 
 	if shimErr != nil {
 		fmt.Printf("   %s Could not install shim: %v\n", Yellow("⚠"), shimErr)

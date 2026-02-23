@@ -1,8 +1,11 @@
 # Command Reference
 
-## `profilex add <tool> <profile>`
+## `profilex add <tool> <profile> [--isolated]`
 
-Create profile, install shim. On first use via the shim, the tool's native auth flow runs.
+Create profile, install shim, and by default wire shared session/history storage for the tool.
+On first use via the shim, the tool's native auth flow runs.
+
+- `--isolated` keeps session/history storage private for this profile.
 
 ## `profilex list [--tool claude|codex] [--json]`
 

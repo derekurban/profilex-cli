@@ -108,6 +108,69 @@ func (m *Manager) EnsureProfile(tool store.Tool, name string) (store.Profile, bo
 	return outProfile, created, nil
 }
 
+// EnableSharedSessions wires the profile's session/history subdirectory to a
+// shared directory under <root>/shared/<tool>/<leaf>.
+//
+// Claude uses "projects" as its session/history folder and Codex uses
+// "sessions".
+func (m *Manager) EnableSharedSessions(profile store.Profile) (string, error) {
+	profileDir, err := m.validatedManagedProfileDir(profile)
+	if err != nil {
+		return "", err
+	}
+
+	leaf, err := sessionLeafForTool(profile.Tool)
+	if err != nil {
+		return "", err
+	}
+
+	sharedDir := filepath.Join(m.Root(), "shared", string(profile.Tool), leaf)
+	if err := os.MkdirAll(sharedDir, 0o755); err != nil {
+		return "", err
+	}
+
+	mountPath := filepath.Join(profileDir, leaf)
+	if info, err := os.Lstat(mountPath); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			target, err := os.Readlink(mountPath)
+			if err != nil {
+				return "", err
+			}
+			if !filepath.IsAbs(target) {
+				target = filepath.Join(filepath.Dir(mountPath), target)
+			}
+			target = filepath.Clean(target)
+			if samePath(target, filepath.Clean(sharedDir)) {
+				return filepath.Clean(sharedDir), nil
+			}
+			return "", fmt.Errorf("%s already points to %q (expected %q)", mountPath, target, sharedDir)
+		}
+
+		if !info.IsDir() {
+			return "", fmt.Errorf("%s exists and is not a directory", mountPath)
+		}
+
+		entries, err := os.ReadDir(mountPath)
+		if err != nil {
+			return "", err
+		}
+		if len(entries) > 0 {
+			return "", fmt.Errorf("%s already contains data; refusing to replace with shared link", mountPath)
+		}
+		if err := os.Remove(mountPath); err != nil {
+			return "", err
+		}
+	} else if !os.IsNotExist(err) {
+		return "", err
+	}
+
+	if err := createDirLink(sharedDir, mountPath); err != nil {
+		return "", err
+	}
+
+	return filepath.Clean(sharedDir), nil
+}
+
 func (m *Manager) GetProfile(st *store.State, tool store.Tool, name string) (store.Profile, error) {
 	_, p := store.FindProfile(st, tool, name)
 	if p == nil {
@@ -295,6 +358,35 @@ func samePath(a, b string) bool {
 		return strings.EqualFold(a, b)
 	}
 	return a == b
+}
+
+func sessionLeafForTool(tool store.Tool) (string, error) {
+	switch tool {
+	case store.ToolClaude:
+		return "projects", nil
+	case store.ToolCodex:
+		return "sessions", nil
+	default:
+		return "", fmt.Errorf("unsupported tool %q for shared sessions", tool)
+	}
+}
+
+func createDirLink(target, linkPath string) error {
+	if err := os.MkdirAll(filepath.Dir(linkPath), 0o755); err != nil {
+		return err
+	}
+	if err := os.Symlink(target, linkPath); err == nil {
+		return nil
+	} else if runtime.GOOS != "windows" {
+		return err
+	}
+
+	cmd := exec.Command("cmd", "/C", "mklink", "/J", linkPath, target)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("mklink failed: %v (%s)", err, strings.TrimSpace(string(out)))
+	}
+	return nil
 }
 
 func runInteractive(ctx context.Context, cmd *exec.Cmd) error {
