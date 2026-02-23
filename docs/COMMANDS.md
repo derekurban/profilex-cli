@@ -71,17 +71,3 @@ Options:
 - `--deep` expands scan to broader home-directory candidates
 - `--cost-mode` accepts `auto|calculate|display`
 
-## `profilex sync init --provider syncthing --dir <path> [--machine <name>] [--auto-export]`
-
-Configure Syncthing-targeted syncing for usage bundles.
-
-- stores config at `~/.profilex/sync.json`
-- sets bundle naming as `local-unified-usage.<machine>.json`
-
-## `profilex sync status`
-
-Show sync config and whether the local bundle file exists.
-
-## `profilex sync export [--deep] [--max-files <n>] [--timezone <tz>] [--cost-mode <mode>] [--out <file>]`
-
-Generate and write a unified usage bundle into the sync target directory (or `--out`).

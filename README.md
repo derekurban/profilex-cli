@@ -108,7 +108,6 @@ Use `--isolated` with `profilex add` to opt out for a profile.
 - `profilex shim install [--dir <path>]` — Reinstall all shims
 - `profilex shim uninstall [--all] [<tool> <profile>]` — Remove shims
 - `profilex usage export [--out <file>] [--deep]` — Export unified usage bundle for ProfileX-UI
-- `profilex sync init|status|export` — Configure and use Syncthing-targeted usage syncing
 
 ### Unified usage export for ProfileX-UI
 
@@ -117,34 +116,6 @@ profilex usage export --out ./public/local-unified-usage.json --deep
 ```
 
 This scans ProfileX-managed and stock Claude/Codex usage locations, normalizes events, maps them to profiles (or `default-*` buckets), and writes a single JSON bundle for ProfileX-UI.
-
-### Syncthing sync setup (free cross-machine)
-
-Use this when you want Mac/Windows machines to continuously exchange usage bundles.
-
-1. Install and pair Syncthing on both machines.
-2. Create a shared folder (example):
-   - Mac: `~/Sync/profilex-usage`
-   - Windows: `C:\\Users\\<you>\\Sync\\profilex-usage`
-3. Initialize ProfileX sync config:
-
-```bash
-profilex sync init --provider syncthing --dir ~/Sync/profilex-usage --machine macbook
-```
-
-4. Export bundle into that synced folder:
-
-```bash
-profilex sync export --deep
-```
-
-5. On the other machine, initialize with its own machine name and run `profilex sync export --deep` too.
-
-Each machine writes a file like:
-
-- `local-unified-usage.<machine>.json`
-
-ProfileX-UI can import multiple bundle files and merge usage across systems.
 
 ---
 
@@ -155,7 +126,6 @@ Default root: `~/.profilex` (or `PROFILEX_HOME` override)
 ```
 ~/.profilex/
 ├── state.json
-├── sync.json
 ├── profiles/
 │   ├── claude/
 │   │   ├── personal/
