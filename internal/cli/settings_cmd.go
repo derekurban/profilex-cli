@@ -13,8 +13,6 @@ func cmdSettings(rootDir string, args []string) error {
 		fmt.Printf("Usage:\n")
 		fmt.Printf("  profilex settings snapshot <tool> <profile|default> <preset>\n")
 		fmt.Printf("  profilex settings apply <tool> <preset> <profile|default>\n")
-		fmt.Printf("  profilex settings sync <tool> <preset> <profile|default>\n")
-		fmt.Printf("  profilex settings unsync <tool> <profile|default>\n")
 		fmt.Printf("  profilex settings list [--tool <tool>] [--json]\n")
 		fmt.Printf("\n")
 		fmt.Printf("Special profile aliases: default, native, @default, @native\n")
@@ -28,10 +26,6 @@ func cmdSettings(rootDir string, args []string) error {
 		return cmdSettingsSnapshot(rootDir, rest)
 	case "apply":
 		return cmdSettingsApply(rootDir, rest)
-	case "sync":
-		return cmdSettingsSync(rootDir, rest)
-	case "unsync":
-		return cmdSettingsUnsync(rootDir, rest)
 	case "list":
 		return cmdSettingsList(rootDir, rest)
 	default:
@@ -52,13 +46,12 @@ func cmdSettingsSnapshot(rootDir string, args []string) error {
 	if err != nil {
 		return err
 	}
-	updated, err := mgr.SnapshotSettings(tool, args[1], args[2])
+	_, err = mgr.SnapshotSettings(tool, args[1], args[2])
 	if err != nil {
 		return err
 	}
 	fmt.Printf("%s Snapshot saved: %s/%s from %s\n", Green("ok"), tool, args[2], args[1])
 	fmt.Printf("   Included paths: %s\n", Dim(settingsPathHint(tool)))
-	fmt.Printf("   Synced profiles updated: %d\n", updated)
 	return nil
 }
 
@@ -79,46 +72,6 @@ func cmdSettingsApply(rootDir string, args []string) error {
 		return err
 	}
 	fmt.Printf("%s Applied settings preset %s/%s to %s\n", Green("ok"), tool, args[1], args[2])
-	return nil
-}
-
-func cmdSettingsSync(rootDir string, args []string) error {
-	if hasHelp(args) || len(args) != 3 {
-		fmt.Printf("Usage: profilex settings sync <tool> <preset> <profile|default>\n")
-		return nil
-	}
-	tool, err := parseTool(args[0])
-	if err != nil {
-		return err
-	}
-	mgr, err := newManager(rootDir)
-	if err != nil {
-		return err
-	}
-	if err := mgr.SetSettingsSync(tool, args[2], args[1], true); err != nil {
-		return err
-	}
-	fmt.Printf("%s Sync enabled: %s/%s -> profile %s\n", Green("ok"), tool, args[1], args[2])
-	return nil
-}
-
-func cmdSettingsUnsync(rootDir string, args []string) error {
-	if hasHelp(args) || len(args) != 2 {
-		fmt.Printf("Usage: profilex settings unsync <tool> <profile|default>\n")
-		return nil
-	}
-	tool, err := parseTool(args[0])
-	if err != nil {
-		return err
-	}
-	mgr, err := newManager(rootDir)
-	if err != nil {
-		return err
-	}
-	if err := mgr.SetSettingsSync(tool, args[1], "", false); err != nil {
-		return err
-	}
-	fmt.Printf("%s Sync disabled for %s/%s\n", Green("ok"), tool, args[1])
 	return nil
 }
 
@@ -143,7 +96,7 @@ func cmdSettingsList(rootDir string, args []string) error {
 	if err != nil {
 		return err
 	}
-	presets, syncs, err := mgr.ListSettings(filter)
+	presets, _, err := mgr.ListSettings(filter)
 	if err != nil {
 		return err
 	}
@@ -151,7 +104,6 @@ func cmdSettingsList(rootDir string, args []string) error {
 	if jsonOut {
 		payload := map[string]any{
 			"presets": presets,
-			"sync":    syncs,
 		}
 		b, _ := json.MarshalIndent(payload, "", "  ")
 		fmt.Println(string(b))
@@ -164,15 +116,6 @@ func cmdSettingsList(rootDir string, args []string) error {
 	} else {
 		for _, p := range presets {
 			fmt.Printf("  - %s/%s\n", p.Tool, p.Name)
-		}
-	}
-	fmt.Println()
-	fmt.Printf("%s\n", Bold("Settings Sync"))
-	if len(syncs) == 0 {
-		fmt.Println("  (none)")
-	} else {
-		for _, s := range syncs {
-			fmt.Printf("  - %s/%s -> %s\n", s.Tool, s.Profile, s.Preset)
 		}
 	}
 	fmt.Println()

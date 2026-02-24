@@ -43,17 +43,9 @@ Current settings allowlist:
 
 Apply a named settings preset to a target profile.
 
-## `profilex settings sync <tool> <preset> <profile|default>`
-
-Enable ongoing sync for one profile to one preset. The preset is applied immediately.
-
-## `profilex settings unsync <tool> <profile|default>`
-
-Disable settings sync for a profile.
-
 ## `profilex settings list [--tool claude|codex] [--json]`
 
-List settings presets and current profile sync mappings.
+List settings presets.
 
 Special profile aliases:
 

@@ -34,8 +34,12 @@ ProfileX has three core layers:
 - Unix/macOS/Linux: `claude-<profile>`, `codex-<profile>`
 - Windows: `claude-<profile>.cmd`, `codex-<profile>.cmd`
 
-Each shim executes:
+Each shim:
 
 ```bash
-profilex run <tool> <profile> -- "$@"
+# 1) Resolve and export profile env from ProfileX
+profilex shim env <tool> <profile>
+
+# 2) Launch the tool directly with that env
+<tool> "$@"
 ```

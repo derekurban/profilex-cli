@@ -174,7 +174,7 @@ func (m *Manager) applyPresetToDir(tool store.Tool, preset, profileDir string) e
 }
 
 // SnapshotSettings stores tool-native settings from a source profile into a
-// named preset and then reapplies it to any synced profiles.
+// named preset.
 func (m *Manager) SnapshotSettings(tool store.Tool, sourceProfile, preset string) (int, error) {
 	if err := store.ValidatePresetName(preset); err != nil {
 		return 0, err
@@ -211,27 +211,7 @@ func (m *Manager) SnapshotSettings(tool store.Tool, sourceProfile, preset string
 	if err := m.touchPreset(tool, preset, now); err != nil {
 		return 0, err
 	}
-
-	updated := 0
-	st, err = m.Load()
-	if err != nil {
-		return 0, err
-	}
-	for _, binding := range st.SettingsSync {
-		if binding.Tool != tool || binding.Preset != preset {
-			continue
-		}
-		targetDir, _, err := m.resolveSettingsProfileDir(st, tool, binding.Profile)
-		if err != nil {
-			return updated, err
-		}
-		if err := m.applyPresetDirToProfile(targetDir, presetDir, tool); err != nil {
-			return updated, err
-		}
-		updated++
-	}
-
-	return updated, nil
+	return 0, nil
 }
 
 func (m *Manager) ApplySettingsPreset(tool store.Tool, preset, profileName string) error {
@@ -303,18 +283,7 @@ func (m *Manager) SetSettingsSync(tool store.Tool, profileName, preset string, e
 }
 
 func (m *Manager) ApplySyncedSettings(profile store.Profile) (bool, string, error) {
-	st, err := m.Load()
-	if err != nil {
-		return false, "", err
-	}
-	_, binding := store.FindSettingsSync(st, profile.Tool, profile.Name)
-	if binding == nil {
-		return false, "", nil
-	}
-	if err := m.applyPresetToDir(profile.Tool, binding.Preset, profile.Dir); err != nil {
-		return false, "", err
-	}
-	return true, binding.Preset, nil
+	return false, "", nil
 }
 
 func (m *Manager) ListSettings(tool *store.Tool) ([]store.SettingsPreset, []store.SettingsSync, error) {

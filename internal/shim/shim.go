@@ -41,17 +41,36 @@ func Install(shimDir string, profile store.Profile, profilexBin string) (string,
 REM %s
 setlocal
 title %s
-%s run %s %s -- %%*
+set "PROFILEX_ENV_FILE=%%TEMP%%\profilex-env-%%RANDOM%%-%%RANDOM%%.tmp"
+%s shim env %s %s > "%%PROFILEX_ENV_FILE%%"
+if errorlevel 1 (
+  if exist "%%PROFILEX_ENV_FILE%%" del /f /q "%%PROFILEX_ENV_FILE%%" >nul 2>&1
+  exit /b %%ERRORLEVEL%%
+)
+for /f "usebackq delims=" %%A in ("%%PROFILEX_ENV_FILE%%") do set "%%A"
+del /f /q "%%PROFILEX_ENV_FILE%%" >nul 2>&1
+%s %%*
 exit /b %%ERRORLEVEL%%
-`, marker, baseName, cmdQuote(profilexBin), profile.Tool, cmdQuote(profile.Name))
+`,
+			marker,
+			baseName,
+			cmdQuote(profilexBin),
+			profile.Tool,
+			cmdQuote(profile.Name),
+			profile.Tool,
+		)
 	} else {
 		content = fmt.Sprintf(`#!/usr/bin/env bash
 # %s
 set -euo pipefail
 # Set terminal/tab title to the active shim profile.
 printf '\033]0;%s\007'
-exec %s run %s %s -- "$@"
-`, marker, baseName, shellQuote(profilexBin), profile.Tool, shellQuote(profile.Name))
+env_lines="$(%s shim env %s %s)"
+while IFS= read -r line; do
+  export "$line"
+done <<< "$env_lines"
+exec %s "$@"
+`, marker, baseName, shellQuote(profilexBin), profile.Tool, shellQuote(profile.Name), profile.Tool)
 	}
 	if err := os.WriteFile(shimPath, []byte(content), 0o755); err != nil {
 		return "", err

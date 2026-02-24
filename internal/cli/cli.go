@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/derekurban/profilex-cli/internal/adapters"
 	"github.com/derekurban/profilex-cli/internal/app"
 	"github.com/derekurban/profilex-cli/internal/shim"
 	"github.com/derekurban/profilex-cli/internal/store"
@@ -98,7 +99,7 @@ func printHelp() {
   use <tool> <profile>          Set the default profile for a tool
   rename <tool> <old> <new>     Rename a profile
   run <tool> [profile] -- ...   Run a tool with the given profile
-  settings <subcommand>         Manage settings snapshots/presets/sync
+  settings <subcommand>         Manage settings snapshots/presets/apply
   shim install [--dir <d>]      Reinstall shims for all profiles
   shim uninstall [--all]        Remove shims
   tui                           Launch interactive terminal UI
@@ -518,9 +519,6 @@ func cmdRun(rootDir string, args []string) error {
 	if err != nil {
 		return err
 	}
-	if _, _, err := mgr.ApplySyncedSettings(profile); err != nil {
-		return err
-	}
 
 	return mgr.RunTool(context.Background(), profile, toolArgs)
 }
@@ -531,6 +529,7 @@ func cmdShim(rootDir string, args []string) error {
 	if len(args) == 0 || hasHelp(args) {
 		fmt.Printf("Usage:\n")
 		fmt.Printf("  profilex shim install [--dir <d>]\n")
+		fmt.Printf("  profilex shim env <tool> <profile>\n")
 		fmt.Printf("  profilex shim uninstall [--all] [<tool> <profile>]\n")
 		return nil
 	}
@@ -541,11 +540,52 @@ func cmdShim(rootDir string, args []string) error {
 	switch sub {
 	case "install":
 		return cmdShimInstall(rootDir, rest)
+	case "env":
+		return cmdShimEnv(rootDir, rest)
 	case "uninstall":
 		return cmdShimUninstall(rootDir, rest)
 	default:
 		return fmt.Errorf("unknown shim subcommand: %s", sub)
 	}
+}
+
+func cmdShimEnv(rootDir string, args []string) error {
+	if hasHelp(args) || len(args) != 2 {
+		fmt.Printf("Usage: profilex shim env <tool> <profile>\n")
+		return nil
+	}
+
+	tool, err := parseTool(args[0])
+	if err != nil {
+		return err
+	}
+
+	mgr, err := newManager(rootDir)
+	if err != nil {
+		return err
+	}
+
+	st, err := mgr.Load()
+	if err != nil {
+		return err
+	}
+
+	profile, err := mgr.ResolveProfile(st, tool, args[1])
+	if err != nil {
+		return err
+	}
+
+	adapter, err := adapters.Get(tool)
+	if err != nil {
+		return err
+	}
+
+	// Output plain KEY=VALUE lines for shim scripts to import.
+	fmt.Printf("%s=%s\n", adapter.EnvVar(), profile.Dir)
+	fmt.Printf("PROFILEX_TOOL=%s\n", tool)
+	fmt.Printf("PROFILEX_PROFILE=%s\n", profile.Name)
+	fmt.Printf("PROFILEX_SHIM_NAME=%s\n", shim.Name(tool, profile.Name))
+	return nil
 }
 
 func cmdShimInstall(rootDir string, args []string) error {

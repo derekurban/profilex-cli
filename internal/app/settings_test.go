@@ -60,7 +60,7 @@ func TestSnapshotAndApplySettingsPresetCodexKeepsAuthIsolated(t *testing.T) {
 	}
 }
 
-func TestSnapshotUpdatesSyncedProfiles(t *testing.T) {
+func TestSnapshotDoesNotAutoApplyToSyncedProfiles(t *testing.T) {
 	m := newTestManager(t)
 	p1, _, err := m.EnsureProfile(store.ToolCodex, "personal1")
 	if err != nil {
@@ -88,16 +88,16 @@ func TestSnapshotUpdatesSyncedProfiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated != 1 {
-		t.Fatalf("expected one synced profile update, got %d", updated)
+	if updated != 0 {
+		t.Fatalf("expected zero auto-applied profiles, got %d", updated)
 	}
 
 	gotCfg, err := os.ReadFile(filepath.Join(p2.Dir, "config.toml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(gotCfg) != "model = \"b\"\n" {
-		t.Fatalf("expected synced config to update, got %q", string(gotCfg))
+	if string(gotCfg) != "model = \"a\"\n" {
+		t.Fatalf("expected target config to remain unchanged after new snapshot, got %q", string(gotCfg))
 	}
 }
 
@@ -134,8 +134,8 @@ func TestApplySyncedSettingsForProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !applied || preset != "shared-preset" {
-		t.Fatalf("expected synced preset to apply, got applied=%v preset=%q", applied, preset)
+	if applied || preset != "" {
+		t.Fatalf("expected no auto-apply, got applied=%v preset=%q", applied, preset)
 	}
 }
 
@@ -233,8 +233,8 @@ func TestSyncMappingToNativeDefaultAlias(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated != 1 {
-		t.Fatalf("expected one sync target update, got %d", updated)
+	if updated != 0 {
+		t.Fatalf("expected no auto-applied targets, got %d", updated)
 	}
 
 	st, err := m.Load()
@@ -249,8 +249,8 @@ func TestSyncMappingToNativeDefaultAlias(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(got) != "model = \"v2\"\n" {
-		t.Fatalf("expected native sync update, got %q", string(got))
+	if string(got) != "model = \"v1\"\n" {
+		t.Fatalf("expected native config to remain unchanged after new snapshot, got %q", string(got))
 	}
 }
 

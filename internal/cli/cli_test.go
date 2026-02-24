@@ -167,3 +167,32 @@ func TestCmdShimInstallReturnsErrorWhenAnyInstallFails(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestShimEnvOutputsProfileEnvironment(t *testing.T) {
+	root := t.TempDir()
+	mgr, err := app.NewManager(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	profile, _, err := mgr.EnsureProfile(store.ToolClaude, "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := captureRunOutput(t, func() int {
+		return Run([]string{"--root", root, "shim", "env", "claude", "work"})
+	})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d (stderr: %q)", code, stderr)
+	}
+	if stderr != "" {
+		t.Fatalf("expected no stderr, got %q", stderr)
+	}
+	if !strings.Contains(stdout, "CLAUDE_CONFIG_DIR="+profile.Dir) {
+		t.Fatalf("missing CLAUDE_CONFIG_DIR output: %q", stdout)
+	}
+	if !strings.Contains(stdout, "PROFILEX_SHIM_NAME=claude-work") {
+		t.Fatalf("missing PROFILEX_SHIM_NAME output: %q", stdout)
+	}
+}
