@@ -1,11 +1,15 @@
 # Command Reference
 
-## `profilex add <tool> <profile> [--isolated]`
+## `profilex add <tool> <profile> [--isolated] [--no-shared-skills]`
 
-Create profile, install shim, and by default wire shared session/history storage for the tool.
+Create profile, install shim, and by default wire:
+- shared session/history storage per tool
+- shared skills storage across all tools and profiles
+
 On first use via the shim, the tool's native auth flow runs.
 
 - `--isolated` keeps session/history storage private for this profile.
+- `--no-shared-skills` keeps skills private for this profile.
 
 ## `profilex list [--tool claude|codex] [--json]`
 

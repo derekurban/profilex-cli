@@ -91,7 +91,7 @@ func printHelp() {
   profilex <command> [options]
 
 %s
-  add <tool> <profile> [--isolated]  Create a new profile and install its shim
+  add <tool> <profile> [--isolated] [--no-shared-skills]  Create a new profile and install its shim
   remove <tool> <profile>       Remove a profile and its shim
   uninstall [--purge]           Uninstall profilex from this machine
   list [--tool <t>] [--json]    List all profiles with auth status
@@ -127,12 +127,14 @@ func printHelp() {
 
 func cmdAdd(rootDir string, args []string) error {
 	isolated, args := extractBool(args, "--isolated")
+	noSharedSkills, args := extractBool(args, "--no-shared-skills")
 
 	if hasHelp(args) || len(args) < 2 {
-		fmt.Printf("Usage: profilex add <tool> <profile> [--isolated]\n\n")
+		fmt.Printf("Usage: profilex add <tool> <profile> [--isolated] [--no-shared-skills]\n\n")
 		fmt.Printf("Supported tools: %s\n", strings.Join(toolNames(), ", "))
 		fmt.Printf("\n")
-		fmt.Printf("  --isolated   Keep session/history storage private for this profile\n")
+		fmt.Printf("  --isolated          Keep session/history storage private for this profile\n")
+		fmt.Printf("  --no-shared-skills  Keep skills private for this profile\n")
 		return nil
 	}
 
@@ -161,6 +163,11 @@ func cmdAdd(rootDir string, args []string) error {
 	if !isolated {
 		sharedDir, sharedErr = mgr.EnableSharedSessions(profile)
 	}
+	sharedSkillsDir := ""
+	sharedSkillsErr := error(nil)
+	if !noSharedSkills {
+		sharedSkillsDir, sharedSkillsErr = mgr.EnableSharedSkills(profile)
+	}
 
 	shimPath, shimErr := installShimForProfile(profile)
 
@@ -173,6 +180,14 @@ func cmdAdd(rootDir string, args []string) error {
 		fmt.Printf("   %s Shared sessions not enabled: %v\n", Yellow("⚠"), sharedErr)
 	} else {
 		fmt.Printf("   🔁 Shared sessions: %s\n", Dim(sharedDir))
+	}
+
+	if noSharedSkills {
+		fmt.Printf("   🔒 Skills: isolated (no shared skills link)\n")
+	} else if sharedSkillsErr != nil {
+		fmt.Printf("   %s Shared skills not enabled: %v\n", Yellow("⚠"), sharedSkillsErr)
+	} else {
+		fmt.Printf("   🧠 Shared skills: %s\n", Dim(sharedSkillsDir))
 	}
 
 	if shimErr != nil {

@@ -38,6 +38,7 @@ type tuiDataMsg struct {
 	Presets       []store.SettingsPreset
 	SyncByProfile map[string]string
 	SessionShared map[string]bool
+	SkillsShared  map[string]bool
 }
 
 type tuiOpMsg struct {
@@ -81,6 +82,7 @@ type model struct {
 	presets       []store.SettingsPreset
 	syncByProfile map[string]string
 	sessionShared map[string]bool
+	skillsShared  map[string]bool
 
 	sidebar []sidebarItem
 	cursor  int
@@ -89,6 +91,7 @@ type model struct {
 	addNameInput textinput.Model
 	addShare     bool
 	addSync      bool
+	addSkills    bool
 
 	exportPathInput textinput.Model
 	exportRunning   bool
@@ -146,8 +149,10 @@ func newModel(rootDir string) model {
 		width:           120,
 		syncByProfile:   map[string]string{},
 		sessionShared:   map[string]bool{},
+		skillsShared:    map[string]bool{},
 		addShare:        true,
 		addSync:         true,
+		addSkills:       true,
 		addNameInput:    add,
 		exportPathInput: out,
 		templateName:    tpl,
@@ -169,7 +174,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case tuiDataMsg:
-		m.state, m.presets, m.syncByProfile, m.sessionShared = msg.State, msg.Presets, msg.SyncByProfile, msg.SessionShared
+		m.state, m.presets, m.syncByProfile, m.sessionShared, m.skillsShared = msg.State, msg.Presets, msg.SyncByProfile, msg.SessionShared, msg.SkillsShared
 		m.sidebar = buildSidebar(msg.State)
 		m.cursor = selectableCursor(m.sidebar, m.cursor)
 		if m.templateCursor >= len(m.presets) {
@@ -261,13 +266,16 @@ func (m model) updateAdd(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "c":
 		m.addSync = !m.addSync
 		return m, nil
+	case "k":
+		m.addSkills = !m.addSkills
+		return m, nil
 	case "enter":
 		name := strings.TrimSpace(m.addNameInput.Value())
 		if name == "" {
 			m.err = "profile name is required"
 			return m, nil
 		}
-		return m, addProfileCmd(m.rootDir, store.SupportedTools[m.addToolIdx], name, m.addShare, m.addSync)
+		return m, addProfileCmd(m.rootDir, store.SupportedTools[m.addToolIdx], name, m.addShare, m.addSync, m.addSkills)
 	}
 	var cmd tea.Cmd
 	m.addNameInput, cmd = m.addNameInput.Update(key)
@@ -363,6 +371,8 @@ func (m model) updateProfile(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "c":
 		_, synced := m.syncByProfile[pk(item.Tool, item.Profile)]
 		return m, toggleConfigSyncCmd(m.rootDir, item.Tool, item.Profile, synced)
+	case "k":
+		return m, toggleSkillsCmd(m.rootDir, item.Tool, item.Profile, m.skillsShared[pk(item.Tool, item.Profile)])
 	case "r":
 		m.prompt.SetValue(item.Profile)
 		m.prompt.Focus()
@@ -494,6 +504,7 @@ func (m model) renderMain() string {
 			"Name: " + m.addNameInput.View(),
 			fmt.Sprintf("Share sessions: %t (s)", m.addShare),
 			fmt.Sprintf("Sync config: %t (c)", m.addSync),
+			fmt.Sprintf("Share skills: %t (k)", m.addSkills),
 			"",
 			"Press Enter to create profile.",
 		}
@@ -538,12 +549,13 @@ func (m model) renderMain() string {
 			fmt.Sprintf("%s/%s", it.Tool, it.Profile),
 			fmt.Sprintf("Session sharing: %t (s toggle)", m.sessionShared[key]),
 		}
+		lines = append(lines, fmt.Sprintf("Skills sharing: %t (k toggle)", m.skillsShared[key]))
 		if p := m.syncByProfile[key]; p != "" {
 			lines = append(lines, fmt.Sprintf("Config sync: on (%s) (c toggle)", p))
 		} else {
 			lines = append(lines, "Config sync: off (c toggle)")
 		}
-		lines = append(lines, "Actions: r rename, d delete")
+		lines = append(lines, "Controls: s sessions, k skills, c config-sync", "Actions: r rename, d delete")
 	default:
 		title = "ProfileX"
 		lines = []string{"Select a sidebar item."}
@@ -729,6 +741,7 @@ func refreshCmd(rootDir string) tea.Cmd {
 			syncBy[pk(s.Tool, s.Profile)] = s.Preset
 		}
 		shared := map[string]bool{}
+		skills := map[string]bool{}
 		for _, p := range st.Profiles {
 			prof, e := mgr.GetProfile(st, p.Tool, p.Name)
 			if e != nil {
@@ -738,12 +751,16 @@ func refreshCmd(rootDir string) tea.Cmd {
 			if e == nil {
 				shared[pk(prof.Tool, prof.Name)] = on
 			}
+			skillsOn, e := mgr.SharedSkillsEnabled(prof)
+			if e == nil {
+				skills[pk(prof.Tool, prof.Name)] = skillsOn
+			}
 		}
-		return tuiDataMsg{State: st, Presets: presets, SyncByProfile: syncBy, SessionShared: shared}
+		return tuiDataMsg{State: st, Presets: presets, SyncByProfile: syncBy, SessionShared: shared, SkillsShared: skills}
 	}
 }
 
-func addProfileCmd(rootDir string, tool store.Tool, name string, share, sync bool) tea.Cmd {
+func addProfileCmd(rootDir string, tool store.Tool, name string, share, sync, shareSkills bool) tea.Cmd {
 	return func() tea.Msg {
 		mgr, err := newManager(rootDir)
 		if err != nil {
@@ -758,6 +775,11 @@ func addProfileCmd(rootDir string, tool store.Tool, name string, share, sync boo
 		}
 		if share {
 			if _, err := mgr.EnableSharedSessions(p); err != nil {
+				return tuiOpMsg{Err: err}
+			}
+		}
+		if shareSkills {
+			if _, err := mgr.EnableSharedSkills(p); err != nil {
 				return tuiOpMsg{Err: err}
 			}
 		}
@@ -798,6 +820,32 @@ func toggleSessionCmd(rootDir string, tool store.Tool, profile string, currently
 			return tuiOpMsg{Err: err}
 		}
 		return tuiOpMsg{Info: "Session sharing updated", Refresh: true}
+	}
+}
+
+func toggleSkillsCmd(rootDir string, tool store.Tool, profile string, currentlyShared bool) tea.Cmd {
+	return func() tea.Msg {
+		mgr, err := newManager(rootDir)
+		if err != nil {
+			return tuiOpMsg{Err: err}
+		}
+		st, err := mgr.Load()
+		if err != nil {
+			return tuiOpMsg{Err: err}
+		}
+		p, err := mgr.GetProfile(st, tool, profile)
+		if err != nil {
+			return tuiOpMsg{Err: err}
+		}
+		if currentlyShared {
+			err = mgr.DisableSharedSkills(p)
+		} else {
+			_, err = mgr.EnableSharedSkills(p)
+		}
+		if err != nil {
+			return tuiOpMsg{Err: err}
+		}
+		return tuiOpMsg{Info: "Skills sharing updated", Refresh: true}
 	}
 }
 

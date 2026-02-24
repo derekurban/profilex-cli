@@ -344,6 +344,105 @@ func TestDisableSharedSessionsRemovesMount(t *testing.T) {
 	}
 }
 
+func TestEnableSharedSkillsUsesSinglePathAcrossTools(t *testing.T) {
+	m := newTestManager(t)
+	codexProfile, _, err := m.EnsureProfile(store.ToolCodex, "codex-main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	claudeProfile, _, err := m.EnsureProfile(store.ToolClaude, "claude-main")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	codexShared, err := m.EnableSharedSkills(codexProfile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claudeShared, err := m.EnableSharedSkills(claudeProfile)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !samePath(codexShared, claudeShared) {
+		t.Fatalf("expected single shared skills path, got %q and %q", codexShared, claudeShared)
+	}
+	if _, err := os.Stat(codexShared); err != nil {
+		t.Fatalf("shared skills directory should exist: %v", err)
+	}
+
+	codexOn, err := m.SharedSkillsEnabled(codexProfile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claudeOn, err := m.SharedSkillsEnabled(claudeProfile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !codexOn || !claudeOn {
+		t.Fatalf("expected shared skills to be enabled for both profiles")
+	}
+}
+
+func TestEnableSharedSkillsRejectsNonEmptyLocalDir(t *testing.T) {
+	m := newTestManager(t)
+	p, _, err := m.EnsureProfile(store.ToolCodex, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	skillsDir := filepath.Join(p.Dir, "skills")
+	if err := os.MkdirAll(skillsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillsDir, "SKILL.md"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := m.EnableSharedSkills(p); err == nil {
+		t.Fatalf("expected non-empty local skills dir to be rejected")
+	}
+}
+
+func TestDisableSharedSkillsRemovesMount(t *testing.T) {
+	m := newTestManager(t)
+	p, _, err := m.EnsureProfile(store.ToolClaude, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.EnableSharedSkills(p); err != nil {
+		t.Fatal(err)
+	}
+
+	enabled, err := m.SharedSkillsEnabled(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !enabled {
+		t.Fatalf("expected shared skills to be enabled")
+	}
+
+	if err := m.DisableSharedSkills(p); err != nil {
+		t.Fatal(err)
+	}
+	enabled, err = m.SharedSkillsEnabled(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if enabled {
+		t.Fatalf("expected shared skills to be disabled")
+	}
+
+	mount := filepath.Join(p.Dir, "skills")
+	info, err := os.Lstat(mount)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("expected local skills dir after disable")
+	}
+}
+
 func TestRenameProfileAlsoUpdatesSettingsSyncBinding(t *testing.T) {
 	m := newTestManager(t)
 	p, _, err := m.EnsureProfile(store.ToolCodex, "old")

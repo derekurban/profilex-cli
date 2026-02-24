@@ -92,13 +92,17 @@ By default, new profiles share session/history storage per tool:
 - Claude profiles link `<profile>/projects` to `~/.profilex/shared/claude/projects`
 - Codex profiles link `<profile>/sessions` to `~/.profilex/shared/codex/sessions`
 
-Use `--isolated` with `profilex add` to opt out for a profile.
+By default, new profiles also share skills across all tools and profiles:
+
+- All profiles link `<profile>/skills` to `~/.profilex/shared/skills`
+
+Use `--isolated` with `profilex add` to keep sessions private, and `--no-shared-skills` to keep skills private.
 
 ---
 
 ## Commands
 
-- `profilex add <tool> <profile> [--isolated]` — Create profile + install shim
+- `profilex add <tool> <profile> [--isolated] [--no-shared-skills]` — Create profile + install shim
 - `profilex remove <tool> <profile> [--purge]` — Remove profile + shim
 - `profilex uninstall [--purge]` — Uninstall profilex binary (and optionally local profilex state)
 - `profilex list [--tool claude|codex] [--json]` — List profiles with status

@@ -234,6 +234,117 @@ func (m *Manager) DisableSharedSessions(profile store.Profile) error {
 	return os.MkdirAll(mountPath, 0o755)
 }
 
+// EnableSharedSkills wires the profile's "skills" subdirectory to a single
+// shared directory under <root>/shared/skills so skills can be reused across
+// all tools and profiles.
+func (m *Manager) EnableSharedSkills(profile store.Profile) (string, error) {
+	profileDir, err := m.validatedManagedProfileDir(profile)
+	if err != nil {
+		return "", err
+	}
+
+	sharedDir := filepath.Clean(filepath.Join(m.Root(), "shared", "skills"))
+	if err := os.MkdirAll(sharedDir, 0o755); err != nil {
+		return "", err
+	}
+
+	mountPath := filepath.Join(profileDir, "skills")
+	if info, err := os.Lstat(mountPath); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			target, err := os.Readlink(mountPath)
+			if err != nil {
+				return "", err
+			}
+			if !filepath.IsAbs(target) {
+				target = filepath.Join(filepath.Dir(mountPath), target)
+			}
+			target = filepath.Clean(target)
+			if samePath(target, sharedDir) {
+				return sharedDir, nil
+			}
+			return "", fmt.Errorf("%s already points to %q (expected %q)", mountPath, target, sharedDir)
+		}
+
+		if !info.IsDir() {
+			return "", fmt.Errorf("%s exists and is not a directory", mountPath)
+		}
+
+		entries, err := os.ReadDir(mountPath)
+		if err != nil {
+			return "", err
+		}
+		if len(entries) > 0 {
+			return "", fmt.Errorf("%s already contains data; refusing to replace with shared link", mountPath)
+		}
+		if err := os.Remove(mountPath); err != nil {
+			return "", err
+		}
+	} else if !os.IsNotExist(err) {
+		return "", err
+	}
+
+	if err := createDirLink(sharedDir, mountPath); err != nil {
+		return "", err
+	}
+
+	return sharedDir, nil
+}
+
+func (m *Manager) SharedSkillsEnabled(profile store.Profile) (bool, error) {
+	profileDir, err := m.validatedManagedProfileDir(profile)
+	if err != nil {
+		return false, err
+	}
+
+	sharedDir := filepath.Clean(filepath.Join(m.Root(), "shared", "skills"))
+	mountPath := filepath.Join(profileDir, "skills")
+	if _, err := os.Lstat(mountPath); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	resolved, err := filepath.EvalSymlinks(mountPath)
+	if err != nil {
+		return false, nil
+	}
+	resolved = filepath.Clean(resolved)
+	return samePath(resolved, sharedDir), nil
+}
+
+func (m *Manager) DisableSharedSkills(profile store.Profile) error {
+	profileDir, err := m.validatedManagedProfileDir(profile)
+	if err != nil {
+		return err
+	}
+
+	mountPath := filepath.Join(profileDir, "skills")
+	info, err := os.Lstat(mountPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return os.MkdirAll(mountPath, 0o755)
+		}
+		return err
+	}
+	if !info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
+		return fmt.Errorf("%s exists and is not a directory", mountPath)
+	}
+
+	shared, err := m.SharedSkillsEnabled(profile)
+	if err != nil {
+		return err
+	}
+	if !shared {
+		return nil
+	}
+
+	if err := removeDirLink(mountPath); err != nil {
+		return err
+	}
+	return os.MkdirAll(mountPath, 0o755)
+}
+
 func (m *Manager) GetProfile(st *store.State, tool store.Tool, name string) (store.Profile, error) {
 	_, p := store.FindProfile(st, tool, name)
 	if p == nil {
