@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -21,6 +22,14 @@ type profileMatch struct {
 	ProfileID         string
 	ProfileName       string
 	IsProfilexManaged bool
+}
+
+type usageFile struct {
+	ParsePath      string
+	CanonicalPath  string
+	DiscoveredPath string
+	AliasPaths     []string
+	AliasRoots     []string
 }
 
 func newProfileResolver(st *store.State) *profileResolver {
@@ -139,18 +148,50 @@ func discoverRoots(rootDir string, st *store.State) []string {
 	return out
 }
 
-func collectJSONLFiles(roots []string, deep bool, maxFiles int) ([]string, error) {
+func collectJSONLFiles(roots []string, deep bool, maxFiles int) ([]usageFile, error) {
 	if maxFiles <= 0 {
 		maxFiles = 5000
 	}
-	set := map[string]bool{}
+	type aggregate struct {
+		canonical string
+		aliases   map[string]bool
+		roots     map[string]bool
+		firstPath string
+	}
+	byCanonical := map[string]*aggregate{}
+
+	addPath := func(path, root string) {
+		normPath := normalizePath(path)
+		normRoot := normalizePath(root)
+		canon := canonicalizePath(path)
+		key := pathKey(canon)
+
+		existing, ok := byCanonical[key]
+		if !ok {
+			if len(byCanonical) >= maxFiles {
+				return
+			}
+			existing = &aggregate{
+				canonical: canon,
+				aliases:   map[string]bool{},
+				roots:     map[string]bool{},
+				firstPath: normPath,
+			}
+			byCanonical[key] = existing
+		}
+		existing.aliases[normPath] = true
+		if normRoot != "" {
+			existing.roots[normRoot] = true
+		}
+	}
 
 	for _, root := range roots {
+		root = normalizePath(root)
 		filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return nil
 			}
-			if len(set) >= maxFiles {
+			if len(byCanonical) >= maxFiles {
 				return fs.SkipAll
 			}
 			if d.IsDir() {
@@ -162,7 +203,7 @@ func collectJSONLFiles(roots []string, deep bool, maxFiles int) ([]string, error
 				return nil
 			}
 			if strings.HasSuffix(strings.ToLower(d.Name()), ".jsonl") {
-				set[normalizePath(path)] = true
+				addPath(path, root)
 			}
 			return nil
 		})
@@ -170,11 +211,12 @@ func collectJSONLFiles(roots []string, deep bool, maxFiles int) ([]string, error
 
 	if deep {
 		home, _ := os.UserHomeDir()
+		home = normalizePath(home)
 		filepath.WalkDir(home, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return nil
 			}
-			if len(set) >= maxFiles {
+			if len(byCanonical) >= maxFiles {
 				return fs.SkipAll
 			}
 			if d.IsDir() {
@@ -188,21 +230,51 @@ func collectJSONLFiles(roots []string, deep bool, maxFiles int) ([]string, error
 			if strings.HasSuffix(strings.ToLower(d.Name()), ".jsonl") {
 				p := strings.ToLower(normalizePath(path))
 				if strings.Contains(p, "/projects/") || strings.Contains(p, "/sessions/") || strings.Contains(p, "/claude/") || strings.Contains(p, "/codex/") {
-					set[normalizePath(path)] = true
+					addPath(path, "")
 				}
 			}
 			return nil
 		})
 	}
 
-	out := make([]string, 0, len(set))
-	for p := range set {
-		out = append(out, p)
+	out := make([]usageFile, 0, len(byCanonical))
+	for _, agg := range byCanonical {
+		aliasPaths := make([]string, 0, len(agg.aliases))
+		for p := range agg.aliases {
+			aliasPaths = append(aliasPaths, p)
+		}
+		sort.Strings(aliasPaths)
+
+		aliasRoots := make([]string, 0, len(agg.roots))
+		for r := range agg.roots {
+			aliasRoots = append(aliasRoots, r)
+		}
+		sort.Strings(aliasRoots)
+
+		parsePath := agg.canonical
+		if strings.TrimSpace(parsePath) == "" {
+			parsePath = agg.firstPath
+		}
+
+		out = append(out, usageFile{
+			ParsePath:      parsePath,
+			CanonicalPath:  agg.canonical,
+			DiscoveredPath: agg.firstPath,
+			AliasPaths:     aliasPaths,
+			AliasRoots:     aliasRoots,
+		})
 	}
-	sort.Strings(out)
-	if len(out) > maxFiles {
-		out = out[:maxFiles]
-	}
+	sort.Slice(out, func(i, j int) bool {
+		left := out[i].CanonicalPath
+		if left == "" {
+			left = out[i].DiscoveredPath
+		}
+		right := out[j].CanonicalPath
+		if right == "" {
+			right = out[j].DiscoveredPath
+		}
+		return pathKey(left) < pathKey(right)
+	})
 	return out, nil
 }
 
@@ -254,4 +326,26 @@ func ensureLeaf(base, leaf string) string {
 
 func strconvItoa(i int) string {
 	return fmt.Sprintf("%d", i)
+}
+
+func canonicalizePath(path string) string {
+	if strings.TrimSpace(path) == "" {
+		return ""
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		abs = path
+	}
+	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
+		return normalizePath(resolved)
+	}
+	return normalizePath(abs)
+}
+
+func pathKey(path string) string {
+	p := normalizePath(path)
+	if runtime.GOOS == "windows" {
+		return strings.ToLower(p)
+	}
+	return p
 }

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -54,27 +55,41 @@ func flattenJSONL(path string) ([]parsedEntry, int, error) {
 
 	entries := []parsedEntry{}
 	malformed := 0
-	scanner := bufio.NewScanner(f)
+	reader := bufio.NewReader(f)
 	lineIdx := 0
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
+	for {
+		raw, err := reader.ReadString('\n')
+		if err != nil && err != io.EOF {
+			return nil, malformed, err
+		}
+
+		line := strings.TrimSpace(raw)
 		if line == "" {
+			if err == io.EOF && raw == "" {
+				break
+			}
 			lineIdx++
+			if err == io.EOF {
+				break
+			}
 			continue
 		}
 		objs, ok := parseLineObjects(line)
 		if !ok {
 			malformed++
 			lineIdx++
+			if err == io.EOF {
+				break
+			}
 			continue
 		}
 		for _, obj := range objs {
 			entries = append(entries, parsedEntry{Obj: obj, LineIndex: lineIdx})
 		}
 		lineIdx++
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, malformed, err
+		if err == io.EOF {
+			break
+		}
 	}
 	return entries, malformed, nil
 }
